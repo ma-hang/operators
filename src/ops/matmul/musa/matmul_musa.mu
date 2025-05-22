@@ -32,31 +32,42 @@ infiniopStatus_t matmul_musa(MatmulMusaDescriptor_t desc, void *c, float beta, v
     auto op_a = info.a_matrix.row_stride == 1 ? MUBLAS_OP_N : MUBLAS_OP_T;
     auto op_b = info.b_matrix.row_stride == 1 ? MUBLAS_OP_N : MUBLAS_OP_T;
 
-    use_mublas(desc->mublas_handles_t, desc->device_id, (MUstream) stream,
-               [&](mublasHandle_t handle) { mublasGemmStridedBatchedEx(
-                                                handle,
-                                                op_a,
-                                                op_b,
-                                                info.m,
-                                                info.n,
-                                                info.k,
-                                                &alpha_,
-                                                a,
-                                                a_type,
-                                                info.a_matrix.ld(),
-                                                info.a_matrix.stride,
-                                                b,
-                                                b_type,
-                                                info.b_matrix.ld(),
-                                                info.b_matrix.stride,
-                                                &beta_,
-                                                c,
-                                                c_type,
-                                                info.c_matrix.ld(),
-                                                info.c_matrix.stride,
-                                                info.batch,
-                                                compute_type,
-                                                MUBLAS_GEMM_DEFAULT);});
+    use_mublas(desc->mublas_handles_t, desc->device_id, (MUstream)stream,
+               [&](mublasHandle_t handle) {
+                   musaEvent_t begin, end;
+                   musaEventCreate(&begin);
+                   musaEventCreate(&end);
+                   musaEventRecord(begin);
+                   mublasGemmStridedBatchedEx(
+                       handle,
+                       op_a,
+                       op_b,
+                       info.m,
+                       info.n,
+                       info.k,
+                       &alpha_,
+                       a,
+                       a_type,
+                       info.a_matrix.ld(),
+                       info.a_matrix.stride,
+                       b,
+                       b_type,
+                       info.b_matrix.ld(),
+                       info.b_matrix.stride,
+                       &beta_,
+                       c,
+                       c_type,
+                       info.c_matrix.ld(),
+                       info.c_matrix.stride,
+                       info.batch,
+                       compute_type,
+                       MUBLAS_GEMM_DEFAULT);
+                   musaEventRecord(end);
+                   musaEventSynchronize(end);
+                   float millonseconds = 0;
+                   musaEventElapsedTime(&millonseconds, begin, end);
+                   printf("matmul exec time: %.3f ms\n", millonseconds);
+               });
     return STATUS_SUCCESS;
 }
 
